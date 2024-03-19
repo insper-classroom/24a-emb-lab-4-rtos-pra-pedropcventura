@@ -27,6 +27,7 @@ SemaphoreHandle_t xSemaphoreTrigger;
 SemaphoreHandle_t xSemaphoreEcho;
 QueueHandle_t xQueueEnd;
 QueueHandle_t xQueueStart;
+QueueHandle_t xQueueDistance;
 
 
 
@@ -35,10 +36,6 @@ QueueHandle_t xQueueStart;
 //     return true; // keep repeating
 // }
 
-typedef struct{
-    int start_us;
-    int end_us;
-} Time;
 
 bool timer_0_callback(repeating_timer_t *rt) {
     xSemaphoreGiveFromISR(xSemaphoreTrigger, 0);
@@ -98,15 +95,43 @@ void echo_task(void *p){
 
     int start;
     int end;
+    int distance;
     while(1){
         if (xSemaphoreTake(xSemaphoreEcho, pdMS_TO_TICKS(0)) == pdTRUE){
             
             if (xQueueReceive(xQueueEnd, &end,  pdMS_TO_TICKS(1000)) && xQueueReceive(xQueueStart, &start,  pdMS_TO_TICKS(1000))){
-                printf("distancia: %d\n", (end-start)/58);
+                distance = (end-start)/58;
+                //printf("distancia: %d\n", distance);
+                xQueueSendFromISR(xQueueDistance, &distance, 0);
             } 
             
         }
         
+    }
+}
+
+void oled_task(void *p){
+    ssd1306_init();
+    ssd1306_t disp;
+    gfx_init(&disp, 128, 32);
+    int distance;
+    char str[20];
+    while(1){
+        if (xQueueReceive(xQueueDistance, &distance,  pdMS_TO_TICKS(1000))){
+            printf("d: %d cm\n", distance);
+            sprintf(str, "Distance: %d", distance);
+            gfx_draw_string(&disp, 0, 10, 1, str);
+            gfx_draw_line(&disp, 15, 25, 15 + distance, 27);
+            gfx_show(&disp);
+            
+            
+        } else{
+            gfx_init(&disp, 128, 32);
+            gfx_clear_buffer(&disp);
+            gfx_draw_string(&disp, 0, 0, 2, "Falha");
+            gfx_show(&disp);
+        }
+        gfx_clear_buffer(&disp);
     }
 }
 
@@ -117,9 +142,11 @@ int main() {
     xSemaphoreEcho = xSemaphoreCreateBinary();
     xQueueEnd = xQueueCreate(32, sizeof(int) );
     xQueueStart = xQueueCreate(32, sizeof(int) );
+    xQueueDistance = xQueueCreate(32, sizeof(int));
 
     xTaskCreate(trigger_task, "trigger task", 256, NULL, 1, NULL);
     xTaskCreate(echo_task, "echo task", 256, NULL, 1, NULL);
+    xTaskCreate(oled_task, "oled task", 256, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
