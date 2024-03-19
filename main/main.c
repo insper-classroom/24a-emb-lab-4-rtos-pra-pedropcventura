@@ -102,7 +102,7 @@ void echo_task(void *p){
             if (xQueueReceive(xQueueEnd, &end,  pdMS_TO_TICKS(1000)) && xQueueReceive(xQueueStart, &start,  pdMS_TO_TICKS(1000))){
                 distance = (end-start)/58;
                 //printf("distancia: %d\n", distance);
-                xQueueSendFromISR(xQueueDistance, &distance, 0);
+                xQueueSend(xQueueDistance, &distance, 0);
             } 
             
         }
